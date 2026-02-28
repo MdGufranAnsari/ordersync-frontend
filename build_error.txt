@@ -1,0 +1,182 @@
+﻿flutter : Support for 
+Android x86 targets will 
+be removed in the next 
+stable release after 3.27. 
+See https://github.com/flut
+ter/flutter/issues/157543 
+for details.
+At line:1 char:1
++ flutter build apk 
+--debug 2>&1 | Out-File 
+-FilePath 
+"build_error.txt" ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~
+    + CategoryInfo         
+     : NotSpecified: (Sup  
+  port for And...43 for    
+ details.:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+Running Gradle task 'assembleDebug'...                          
+Your project is configured 
+with Android NDK 
+26.3.11579264, but the 
+following plugin(s) depend 
+on a different Android NDK 
+version:
+- path_provider_android 
+requires Android NDK 
+27.0.12077973
+Fix this issue by using 
+the highest Android NDK 
+version (they are backward 
+compatible).
+Add the following to C:\Use
+rs\gufra\Customer-Seller\fl
+utter-frontend\android\app\
+build.gradle.kts:
+
+    android {
+        ndkVersion = 
+"27.0.12077973"
+        ...
+    }
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:3:8: Error: Error 
+when reading 'lib/features/
+core/storage/token_storage.
+dart': The system cannot 
+find the path specified.
+
+import '../../../core/stora
+ge/token_storage.dart';
+       ^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:4:8: Error: Error 
+when reading 'lib/features/
+auth/presentation/data/auth
+_repository.dart': The 
+system cannot find the 
+path specified.
+
+import '../data/auth_reposi
+tory.dart';
+       ^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:36:9: Error: Type 
+'AuthRepository' not found.
+  final AuthRepository 
+_repository;
+        ^^^^^^^^^^^^^^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:7:41: Error: 
+'AuthRepository' isn't a 
+type.
+final 
+authRepositoryProvider = Pr
+ovider<AuthRepository>((ref
+) => AuthRepository());
+                           
+             ^^^^^^^^^^^^^^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:7:66: Error: Method 
+not found: 
+'AuthRepository'.
+final 
+authRepositoryProvider = Pr
+ovider<AuthRepository>((ref
+) => AuthRepository());
+                           
+                           
+           ^^^^^^^^^^^^^^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:36:9: Error: 
+'AuthRepository' isn't a 
+type.
+  final AuthRepository 
+_repository;
+        ^^^^^^^^^^^^^^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:75:13: Error: The 
+getter 'TokenStorage' 
+isn't defined for the 
+class 'AuthNotifier'.
+ - 'AuthNotifier' is from '
+package:customer_seller/fea
+tures/auth/presentation/pro
+viders/auth_provider.dart' 
+('lib/features/auth/present
+ation/providers/auth_provid
+er.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a 
+getter or field named 
+'TokenStorage'.
+      await TokenStorage.sa
+veToken(token);
+            ^^^^^^^^^^^^
+lib/features/auth/presentat
+ion/providers/auth_provider
+.dart:76:13: Error: The 
+getter 'TokenStorage' 
+isn't defined for the 
+class 'AuthNotifier'.
+ - 'AuthNotifier' is from '
+package:customer_seller/fea
+tures/auth/presentation/pro
+viders/auth_provider.dart' 
+('lib/features/auth/present
+ation/providers/auth_provid
+er.dart').
+Try correcting the name to 
+the name of an existing 
+getter, or defining a 
+getter or field named 
+'TokenStorage'.
+      await TokenStorage.sa
+veRole(role);
+            ^^^^^^^^^^^^
+Target 
+kernel_snapshot_program 
+failed: Exception
+
+
+FAILURE: Build failed with 
+an exception.
+
+* What went wrong:
+Execution failed for task '
+:app:compileFlutterBuildDeb
+ug'.
+> Process 'command 'C:\src\
+flutter\bin\flutter.bat'' 
+finished with non-zero 
+exit value 1
+
+* Try:
+> Run with --stacktrace 
+option to get the stack 
+trace.
+> Run with --info or 
+--debug option to get more 
+log output.
+> Run with --scan to get 
+full insights.
+> Get more help at 
+https://help.gradle.org.
+
+BUILD FAILED in 12s
+Running Gradle task 'assembleDebug'...                             12.6s
+Gradle task assembleDebug 
+failed with exit code 1
