@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../core/services/local_storage.dart';
+import '../../providers/auth_provider.dart';
 import 'login_screen.dart';
 import '../orders/customer_dashboard.dart';
 import '../orders/seller_dashboard.dart';
@@ -24,11 +24,11 @@ class _SplashScreenState extends ConsumerState<SplashScreen> {
 
     if (!mounted) return;
 
-    final token = TokenStorage.getToken();
-    final role = TokenStorage.getRole();
+    await ref.read(authProvider.notifier).init();
+    final authState = ref.read(authProvider);
 
-    if (token != null && role != null) {
-      if (role == 'seller') {
+    if (authState.isAuthenticated && authState.user != null) {
+      if (authState.user!.role == 'seller') {
         _go(const SellerDashboard());
       } else {
         _go(const CustomerDashboard());

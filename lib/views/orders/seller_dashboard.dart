@@ -1,9 +1,14 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:image_picker/image_picker.dart';
+import '../../core/utils/constants.dart';
 import '../../providers/order_provider.dart';
 import '../../providers/auth_provider.dart';
 import '../auth/login_screen.dart';
 import 'order_detail_screen.dart';
+import 'customer_order_history_screen.dart';
+import '../../core/widgets/user_avatar.dart';
 
 const _kPrimary = Color(0xFF3D52D5);
 const _kBg = Color(0xFFF0F2F5);
@@ -18,6 +23,7 @@ class SellerDashboard extends ConsumerStatefulWidget {
 }
 
 class _SellerDashboardState extends ConsumerState<SellerDashboard> {
+  int _currentIndex = 0;
   final _searchController = TextEditingController();
   String _searchQuery = '';
 
@@ -71,27 +77,78 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
     return Scaffold(
       backgroundColor: _kBg,
       body: SafeArea(
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // ── AppBar ──
+        child: _buildCurrentTab(filtered, grouped),
+      ),
+      bottomNavigationBar: NavigationBar(
+        selectedIndex: _currentIndex,
+        onDestinationSelected: (index) => setState(() => _currentIndex = index),
+        backgroundColor: Colors.white,
+        indicatorColor: _kPrimary.withValues(alpha: 0.15),
+        destinations: const [
+          NavigationDestination(
+            icon: Icon(Icons.dashboard_outlined),
+            selectedIcon: Icon(Icons.dashboard_rounded, color: _kPrimary),
+            label: 'Home',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.history_rounded),
+            selectedIcon: Icon(Icons.history_rounded, color: _kPrimary),
+            label: 'History',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.person_outline_rounded),
+            selectedIcon: Icon(Icons.person_rounded, color: _kPrimary),
+            label: 'Profile',
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _pickImage() async {
+    final picker = ImagePicker();
+    final pickedFile = await picker.pickImage(source: ImageSource.gallery, imageQuality: 50);
+
+    if (pickedFile != null) {
+      final file = File(pickedFile.path);
+      await ref.read(authProvider.notifier).uploadProfileImage(file);
+      if (!mounted) return;
+      
+      final authState = ref.read(authProvider);
+      if (authState.error != null) {
+        if (!mounted) return;
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(authState.error!),
+          backgroundColor: Colors.redAccent,
+        ));
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Profile picture updated successfully!'),
+          backgroundColor: _kPrimary,
+        ));
+      }
+    }
+  }
+
+  Widget _buildCurrentTab(List<dynamic> filtered, Map<String, List<dynamic>> grouped) {
+    if (_currentIndex == 0) return _buildHomeTab(filtered, grouped);
+    if (_currentIndex == 1) return _buildHistoryTab();
+    return _buildProfileTab();
+  }
+
+  Widget _buildHomeTab(List<dynamic> filtered, Map<String, List<dynamic>> grouped) {
+    final orderState = ref.watch(orderProvider);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── AppBar ──
             Padding(
               padding: const EdgeInsets.fromLTRB(20, 16, 16, 0),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text('Seller Dashboard',
-                      style: TextStyle(
-                          fontSize: 22,
-                          fontWeight: FontWeight.bold,
-                          color: Color(0xFF0F172A))),
-                  IconButton(
-                    onPressed: _logout,
-                    icon: const Icon(Icons.logout_rounded,
-                        color: Color(0xFF64748B)),
-                  ),
-                ],
-              ),
+              child: const Text('Seller Dashboard',
+                  style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFF0F172A))),
             ),
 
             // ── Search bar ──
@@ -104,7 +161,7 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                   borderRadius: BorderRadius.circular(30),
                   boxShadow: [
                     BoxShadow(
-                        color: Colors.black.withOpacity(0.05),
+                        color: Colors.black.withValues(alpha: 0.05),
                         blurRadius: 8)
                   ],
                 ),
@@ -165,6 +222,11 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                               final pendingCount = customerOrders
                                   .where((o) => o.status.toUpperCase() == 'PENDING')
                                   .length;
+                                  
+                              final activeOrders = customerOrders.where((o) {
+                                final s = o.status.toUpperCase();
+                                return s == 'PENDING' || s == 'READY' || s == 'CONFIRMED' || s == 'CONFIRMED_IMMEDIATE' || s == 'PRICED';
+                              }).toList();
 
                               return Container(
                                 margin: const EdgeInsets.only(bottom: 14),
@@ -186,14 +248,10 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                                       padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
                                       child: Row(
                                         children: [
-                                          CircleAvatar(
+                                          UserAvatar(
+                                            profileImage: first.customerProfileImage,
+                                            name: customerName,
                                             radius: 22,
-                                            backgroundColor: const Color(0xFFEEEFF8),
-                                            child: Text(initials,
-                                                style: const TextStyle(
-                                                    color: _kPrimary,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 14)),
                                           ),
                                           const SizedBox(width: 12),
                                           Expanded(
@@ -213,29 +271,58 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                                               ],
                                             ),
                                           ),
-                                          Container(
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 10, vertical: 4),
-                                            decoration: BoxDecoration(
-                                              color: const Color(0xFFEEEFF8),
-                                              borderRadius: BorderRadius.circular(20),
-                                            ),
-                                            child: Text(
-                                              '${customerOrders.length} Order${customerOrders.length > 1 ? 's' : ''}',
-                                              style: const TextStyle(
-                                                  color: _kPrimary,
-                                                  fontWeight: FontWeight.w600,
-                                                  fontSize: 12),
+                                          GestureDetector(
+                                            onTap: () {
+                                              Navigator.push(
+                                                context,
+                                                MaterialPageRoute(
+                                                  builder: (_) => CustomerOrderHistoryScreen(
+                                                    customerName: customerName,
+                                                    customerPhone: first.customerPhone,
+                                                    orders: customerOrders,
+                                                  ),
+                                                ),
+                                              );
+                                            },
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(
+                                                  horizontal: 10, vertical: 6),
+                                              decoration: BoxDecoration(
+                                                color: const Color(0xFFEEF2FF),
+                                                borderRadius: BorderRadius.circular(20),
+                                              ),
+                                              child: Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  Text(
+                                                    '${customerOrders.length} Order${customerOrders.length > 1 ? 's' : ''}',
+                                                    style: const TextStyle(
+                                                        color: _kPrimary,
+                                                        fontWeight: FontWeight.w600,
+                                                        fontSize: 12),
+                                                  ),
+                                                  const SizedBox(width: 4),
+                                                  const Icon(Icons.arrow_forward_ios_rounded, size: 10, color: _kPrimary),
+                                                ],
+                                              ),
                                             ),
                                           ),
                                         ],
                                       ),
                                     ),
 
-                                    const Divider(height: 1, indent: 14, endIndent: 14),
+                                    // Only show divider if there are active orders to show below
+                                    if (activeOrders.isNotEmpty)
+                                      const Divider(height: 1, indent: 14, endIndent: 14),
 
-                                    // ── Order sub-rows ──
-                                    ...customerOrders.map((order) {
+                                    // ── Active Order sub-rows ──
+                                    if (activeOrders.isEmpty)
+                                      const Padding(
+                                        padding: EdgeInsets.all(16.0),
+                                        child: Text('No active orders. Tap above to see history.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 13, fontStyle: FontStyle.italic)),
+                                      )
+                                    else
+                                      ...activeOrders.map((order) {
                                       final isPending = order.status.toUpperCase() == 'PENDING';
                                       return InkWell(
                                         onTap: () => Navigator.push(
@@ -253,7 +340,7 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                                                 width: 4,
                                                 height: 40,
                                                 decoration: BoxDecoration(
-                                                  color: isPending ? _kPending : _kPriced,
+                                                  color: _statusColor(order.status),
                                                   borderRadius: BorderRadius.circular(4),
                                                 ),
                                               ),
@@ -306,7 +393,7 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                                           '$pendingCount pending — needs pricing',
                                           style: TextStyle(
                                               fontSize: 11,
-                                              color: _kPending.withOpacity(0.8),
+                                              color: _kPending.withValues(alpha: 0.8),
                                               fontStyle: FontStyle.italic),
                                         ),
                                       )
@@ -320,32 +407,322 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
                         ),
             ),
           ],
+    );
+  }
+
+  Widget _buildHistoryTab() {
+    final orderState = ref.watch(orderProvider);
+    final allOrders = orderState.orders;
+    final historyOrders = allOrders.where((o) {
+      final s = o.status.toUpperCase();
+      return s == 'COMPLETED' || s == 'EXPIRED' || s == 'EXPIRED_PENDING_CONFIRMATION';
+    }).toList();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── AppBar ──
+        const Padding(
+          padding: EdgeInsets.fromLTRB(20, 16, 16, 16),
+          child: Text('Order History',
+              style: TextStyle(
+                  fontSize: 22,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFF0F172A))),
         ),
-      ),
+        
+        // ── Content ──
+        Expanded(
+          child: orderState.isLoading
+              ? const Center(child: CircularProgressIndicator(color: _kPrimary))
+              : historyOrders.isEmpty
+                  ? Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.history_rounded, size: 64, color: Colors.grey.shade300),
+                          const SizedBox(height: 16),
+                          const Text('No past orders found.', style: TextStyle(color: Color(0xFF94A3B8), fontSize: 15)),
+                        ],
+                      ),
+                    )
+                  : RefreshIndicator(
+                      color: _kPrimary,
+                      onRefresh: () => ref.read(orderProvider.notifier).fetchSellerOrders(),
+                      child: ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(20, 4, 20, 20),
+                        itemCount: historyOrders.length,
+                        itemBuilder: (context, index) {
+                          final order = historyOrders[index];
+                          return InkWell(
+                            onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => OrderDetailScreen(order: order, isSeller: true))),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: Colors.white,
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.04), blurRadius: 8, offset: const Offset(0, 2))],
+                              ),
+                              child: Row(
+                                children: [
+                                  UserAvatar(
+                                    profileImage: order.customerProfileImage,
+                                    name: order.customerName,
+                                    radius: 20,
+                                  ),
+                                  const SizedBox(width: 12),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Row(
+                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          children: [
+                                            Text('#ORD-${order.id.substring(0, 8).toUpperCase()}',
+                                                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                                            _statusBadge(order.status),
+                                          ],
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Text('${order.customerName}  •  ${_timeLabel(order.createdAt)}',
+                                            style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildProfileTab() {
+    final user = ref.watch(authProvider).user;
+    if (user == null) return const Center(child: CircularProgressIndicator());
+
+    final isRestricted = ref.watch(authProvider).accountStatus == 'restricted';
+
+    return ListView(
+      padding: EdgeInsets.zero,
+      children: [
+        // ── Header/Avatar Card ──
+        Container(
+          padding: const EdgeInsets.fromLTRB(24, 60, 24, 30),
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [_kPrimary, Color(0xFF5B73E8)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+            borderRadius: BorderRadius.only(
+              bottomLeft: Radius.circular(32),
+              bottomRight: Radius.circular(32),
+            ),
+          ),
+          child: Column(
+            children: [
+              GestureDetector(
+                onTap: _pickImage,
+                child: Stack(
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.all(4),
+                      decoration: const BoxDecoration(
+                        color: Colors.white,
+                        shape: BoxShape.circle,
+                      ),
+                      child: CircleAvatar(
+                        radius: 46,
+                        backgroundColor: _kPrimary.withValues(alpha: 0.1),
+                        backgroundImage: user.profileImage != null
+                            ? NetworkImage('${AppConstants.imageBaseUrl}${user.profileImage}')
+                            : null,
+                        child: user.profileImage == null
+                            ? const Icon(Icons.storefront_rounded, size: 46, color: _kPrimary)
+                            : null,
+                      ),
+                    ),
+                    Positioned(
+                      bottom: 0,
+                      right: 0,
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: _kPrimary,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.white, width: 2),
+                        ),
+                        child: const Icon(Icons.camera_alt_rounded, size: 16, color: Colors.white),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                user.name,
+                style: const TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: Colors.white)
+              ),
+              const SizedBox(height: 6),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.2),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  user.phone,
+                  style: const TextStyle(fontSize: 14, color: Colors.white, fontWeight: FontWeight.w500)
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 24),
+
+        // ── Restriction Warning ──
+        if (isRestricted)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24),
+            child: Container(
+              padding: const EdgeInsets.all(16),
+              margin: const EdgeInsets.only(bottom: 24),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFEF2F2),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: const Color(0xFFFECACA), width: 1.5),
+              ),
+              child: Row(
+                children: [
+                  const Icon(Icons.warning_rounded, color: Color(0xFFEF4444)),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        Text('Account Restricted', style: TextStyle(color: Color(0xFF991B1B), fontWeight: FontWeight.bold, fontSize: 14)),
+                        SizedBox(height: 4),
+                        Text('Your catalog operations are currently restricted. Please contact support.',
+                            style: TextStyle(color: Color(0xFFB91C1C), fontSize: 13)),
+                      ],
+                    ),
+                  )
+                ],
+              ),
+            ),
+          ),
+
+        // ── Settings Cards ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text('Account Settings', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFF0F172A))),
+              const SizedBox(height: 12),
+              Container(
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [BoxShadow(color: Colors.black.withValues(alpha: 0.03), blurRadius: 10, offset: const Offset(0, 4))],
+                ),
+                child: Column(
+                  children: [
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.person_outline_rounded, color: Color(0xFF475569)),
+                      ),
+                      title: const Text('Personal Details', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+                      onTap: () {},
+                    ),
+                    Divider(color: Colors.grey.shade100, height: 1),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.store_mall_directory_outlined, color: Color(0xFF475569)),
+                      ),
+                      title: const Text('Store Configuration', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+                      onTap: () {},
+                    ),
+                    Divider(color: Colors.grey.shade100, height: 1),
+                    ListTile(
+                      leading: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(color: const Color(0xFFF1F5F9), borderRadius: BorderRadius.circular(8)),
+                        child: const Icon(Icons.help_outline_rounded, color: Color(0xFF475569)),
+                      ),
+                      title: const Text('Help & Support', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 15)),
+                      trailing: const Icon(Icons.chevron_right_rounded, color: Color(0xFF94A3B8)),
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+        ),
+
+        const SizedBox(height: 32),
+
+        // ── Action Buttons ──
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+          child: SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: _logout,
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Log Out', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFFFEF2F2),
+                foregroundColor: const Color(0xFFEF4444),
+                elevation: 0,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(height: 40),
+      ],
     );
   }
 
   Widget _statusBadge(String status) {
-    final isPending = status.toUpperCase() == 'PENDING';
+    final s = status.toUpperCase();
+    final Map<String, (String, Color, Color, IconData)> map = {
+      'PENDING':                      ('Pending',   const Color(0xFFFFF4E5), _kPending,        Icons.access_time_rounded),
+      'PRICED':                       ('Priced',    const Color(0xFFF0FDF4), _kPriced,         Icons.attach_money_rounded),
+      'CONFIRMED':                    ('Confirmed', const Color(0xFFEEF0FA), _kPrimary,        Icons.check_circle_outline_rounded),
+      'CONFIRMED_IMMEDIATE':          ('Immediate', const Color(0xFFEEF0FA), _kPrimary,        Icons.store_rounded),
+      'READY':                        ('Ready',     const Color(0xFFFFF4E5), _kPending,        Icons.inventory_2_outlined),
+      'COMPLETED':                    ('Done',      const Color(0xFFF0FDF4), _kPriced,         Icons.verified_rounded),
+      'EXPIRED_PENDING_CONFIRMATION': ('Expired',   const Color(0xFFFEF2F2), Colors.redAccent, Icons.warning_amber_rounded),
+      'EXPIRED':                      ('Expired',   const Color(0xFFFEF2F2), Colors.redAccent, Icons.warning_amber_rounded),
+    };
+    final (label, bg, fg, icon) = map[s] ?? ('Unknown', const Color(0xFFF1F5F9), const Color(0xFF94A3B8), Icons.help_outline_rounded);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: isPending
-            ? const Color(0xFFFFF4E5)
-            : const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isPending
-              ? const Color(0xFFFED7AA)
-              : const Color(0xFFBBF7D0),
-        ),
-      ),
-      child: Text(
-        isPending ? 'Pending' : 'Priced',
-        style: TextStyle(
-            color: isPending ? _kPending : _kPriced,
-            fontWeight: FontWeight.w600,
-            fontSize: 12),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 12, color: fg),
+          const SizedBox(width: 4),
+          Text(label, style: TextStyle(color: fg, fontWeight: FontWeight.bold, fontSize: 11)),
+        ],
       ),
     );
   }
@@ -381,5 +758,20 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
     final m = d.minute.toString().padLeft(2, '0');
     final ampm = d.hour >= 12 ? 'PM' : 'AM';
     return '$h:$m $ampm';
+  }
+
+  Color _statusColor(String status) {
+    final s = status.toUpperCase();
+    final Map<String, Color> map = {
+      'PENDING':                       _kPending,
+      'PRICED':                        _kPriced,
+      'CONFIRMED':                     _kPrimary,
+      'CONFIRMED_IMMEDIATE':           _kPrimary,
+      'READY':                         _kPending,
+      'COMPLETED':                     _kPriced,
+      'EXPIRED_PENDING_CONFIRMATION':  Colors.redAccent,
+      'EXPIRED':                       Colors.redAccent,
+    };
+    return map[s] ?? const Color(0xFF64748B);
   }
 }

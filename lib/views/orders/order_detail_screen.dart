@@ -25,6 +25,7 @@ class OrderDetailScreen extends ConsumerStatefulWidget {
 class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   late List<TextEditingController> _nameControllers;
   late List<TextEditingController> _priceControllers;
+  final TextEditingController _codeController = TextEditingController();
   bool _isDirty = false;
 
   @override
@@ -42,7 +43,189 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
   void dispose() {
     for (final c in _nameControllers) c.dispose();
     for (final c in _priceControllers) c.dispose();
+    _codeController.dispose();
     super.dispose();
+  }
+
+  // ── Lifecycle action helpers ──
+
+  Future<void> _confirmOrder(String pickupType) async {
+    final success = await ref.read(orderProvider.notifier).confirmOrder(
+      orderId: widget.order.id,
+      pickupType: pickupType,
+    );
+    if (!mounted) return;
+    if (success) {
+      _snack(
+        pickupType == 'immediate'
+            ? 'Order confirmed! Please collect at the shop.'
+            : 'Order confirmed! Pickup code sent.',
+        _kPriced,
+      );
+      Navigator.pop(context);
+    } else {
+      _snack(ref.read(orderProvider).error ?? 'Failed', Colors.redAccent);
+    }
+  }
+
+  void _showConfirmPickupDialog() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      builder: (_) => Padding(
+        padding: const EdgeInsets.fromLTRB(24, 16, 24, 40),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40, height: 4,
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                    color: Colors.grey.shade300,
+                    borderRadius: BorderRadius.circular(2)),
+              ),
+            ),
+            const Text('Choose Pickup Type',
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            const SizedBox(height: 6),
+            const Text(
+              'How will you collect your order?',
+              style: TextStyle(fontSize: 13, color: Color(0xFF64748B)),
+            ),
+            const SizedBox(height: 20),
+            // Immediate
+            _pickupOption(
+              icon: Icons.store_rounded,
+              color: _kPrimary,
+              title: 'Immediate Pickup',
+              subtitle: 'Go to the shop now and collect directly.',
+              onTap: () { Navigator.pop(context); _confirmOrder('immediate'); },
+            ),
+            const SizedBox(height: 12),
+            // Later
+            _pickupOption(
+              icon: Icons.schedule_rounded,
+              color: _kPending,
+              title: 'Later Pickup',
+              subtitle: 'Seller prepares order. You get a pickup code.',
+              onTap: () { Navigator.pop(context); _confirmOrder('later'); },
+            ),
+            const SizedBox(height: 8),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _pickupOption({
+    required IconData icon,
+    required Color color,
+    required String title,
+    required String subtitle,
+    required VoidCallback onTap,
+  }) =>
+      InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            border: Border.all(color: color.withOpacity(0.3)),
+            borderRadius: BorderRadius.circular(14),
+            color: color.withOpacity(0.05),
+          ),
+          child: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                    color: color.withOpacity(0.12),
+                    borderRadius: BorderRadius.circular(10)),
+                child: Icon(icon, color: color, size: 22),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(title,
+                        style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            color: color,
+                            fontSize: 15)),
+                    Text(subtitle,
+                        style: const TextStyle(
+                            fontSize: 12, color: Color(0xFF64748B))),
+                  ],
+                ),
+              ),
+              Icon(Icons.chevron_right_rounded, color: color),
+            ],
+          ),
+        ),
+      );
+
+  Future<void> _markReady() async {
+    final success = await ref.read(orderProvider.notifier).markReady(
+          orderId: widget.order.id);
+    if (!mounted) return;
+    if (success) {
+      _snack('Order marked ready! 2-hour countdown started.', _kPriced);
+      Navigator.pop(context);
+    } else {
+      _snack(ref.read(orderProvider).error ?? 'Failed', Colors.redAccent);
+    }
+  }
+
+  Future<void> _verifyCode() async {
+    final code = _codeController.text.trim();
+    if (code.length != 4) {
+      _snack('Enter the 4-digit pickup code.', Colors.orange);
+      return;
+    }
+    final success = await ref.read(orderProvider.notifier).verifyCode(
+          orderId: widget.order.id, code: code);
+    if (!mounted) return;
+    if (success) {
+      _snack('Code verified! Order completed.', _kPriced);
+      Navigator.pop(context);
+    } else {
+      _snack(ref.read(orderProvider).error ?? 'Wrong code', Colors.redAccent);
+    }
+  }
+
+  Future<void> _completeOrder() async {
+    final success = await ref.read(orderProvider.notifier).completeOrder(
+          orderId: widget.order.id);
+    if (!mounted) return;
+    if (success) {
+      _snack('Order marked as completed!', _kPriced);
+      Navigator.pop(context);
+    } else {
+      _snack(ref.read(orderProvider).error ?? 'Failed', Colors.redAccent);
+    }
+  }
+
+  Future<void> _reportNoShow() async {
+    final result = await ref.read(orderProvider.notifier).reportNoShow(
+          orderId: widget.order.id);
+    if (!mounted) return;
+    if (result != null) {
+      final restricted = result['restricted'] as bool? ?? false;
+      final count = result['noShowCount'] as int? ?? 0;
+      _snack(
+        restricted
+            ? 'Customer account restricted after $count no-shows.'
+            : 'No-show recorded. Strike $count/3.',
+        Colors.redAccent,
+      );
+      Navigator.pop(context);
+    } else {
+      _snack(ref.read(orderProvider).error ?? 'Failed', Colors.redAccent);
+    }
   }
 
   void _addRow() {
@@ -349,7 +532,7 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       ),
                     ),
                   ),
-                  _statusPill(widget.order.status),
+                  const SizedBox(width: 48), // Balance for back button
                 ],
               ),
             ),
@@ -414,6 +597,11 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                         ),
                       ),
                     ),
+
+                    const SizedBox(height: 12),
+
+                    // ── Status Stepper ──
+                    _buildStepper(),
 
                     const SizedBox(height: 12),
 
@@ -828,6 +1016,147 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
                       ),
                     ],
 
+                    // ── Lifecycle Info Card ──
+                    _buildLifecycleCard(),
+
+                    // ── Seller: code entry field when status=ready ──
+                    if (widget.isSeller && widget.order.status == 'ready') ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          boxShadow: [BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10)],
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text('Enter Pickup Code',
+                                style: TextStyle(
+                                    fontWeight: FontWeight.bold,
+                                    fontSize: 15,
+                                    color: Color(0xFF0F172A))),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Ask the customer for their 4-digit code',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF94A3B8)),
+                            ),
+                            const SizedBox(height: 12),
+                            TextField(
+                              controller: _codeController,
+                              keyboardType: TextInputType.number,
+                              maxLength: 4,
+                              textAlign: TextAlign.center,
+                              style: const TextStyle(
+                                  fontSize: 28,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 12,
+                                  color: _kPrimary),
+                              decoration: InputDecoration(
+                                counterText: '',
+                                hintText: '_ _ _ _',
+                                hintStyle: const TextStyle(
+                                    color: Color(0xFFCBD5E1),
+                                    letterSpacing: 8,
+                                    fontSize: 22),
+                                filled: true,
+                                fillColor: const Color(0xFFF1F5F9),
+                                border: OutlineInputBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                    borderSide: BorderSide.none),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
+                    // ── Seller: expired_pending_confirmation buttons ──
+                    if (widget.isSeller && widget.order.status == 'expired_pending_confirmation') ...[
+                      const SizedBox(height: 12),
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(16),
+                          border: Border.all(color: const Color(0xFFFED7AA)),
+                        ),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(Icons.help_outline_rounded,
+                                    color: Color(0xFFF97316), size: 20),
+                                SizedBox(width: 8),
+                                Text('Did the customer collect?',
+                                    style: TextStyle(
+                                        fontWeight: FontWeight.bold,
+                                        fontSize: 15,
+                                        color: Color(0xFF0F172A))),
+                              ],
+                            ),
+                            const SizedBox(height: 4),
+                            const Text(
+                              'Pickup deadline has passed. Confirm whether the customer actually collected the order.',
+                              style: TextStyle(
+                                  fontSize: 12, color: Color(0xFF64748B)),
+                            ),
+                            const SizedBox(height: 16),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: OutlinedButton.icon(
+                                    onPressed: ref.watch(orderProvider).isLoading
+                                        ? null
+                                        : _reportNoShow,
+                                    icon: const Icon(Icons.close_rounded,
+                                        color: Colors.redAccent),
+                                    label: const Text('No, did not collect',
+                                        style: TextStyle(
+                                            color: Colors.redAccent,
+                                            fontWeight: FontWeight.w600)),
+                                    style: OutlinedButton.styleFrom(
+                                      side: const BorderSide(
+                                          color: Colors.redAccent),
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(30)),
+                                    ),
+                                  ),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: ElevatedButton.icon(
+                                    onPressed: ref.watch(orderProvider).isLoading
+                                        ? null
+                                        : _completeOrder,
+                                    icon: const Icon(
+                                        Icons.check_circle_outline_rounded),
+                                    label: const Text('Yes, collected',
+                                        style: TextStyle(
+                                            fontWeight: FontWeight.w600)),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: _kPriced,
+                                      foregroundColor: Colors.white,
+                                      elevation: 0,
+                                      shape: RoundedRectangleBorder(
+                                          borderRadius:
+                                              BorderRadius.circular(30)),
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+
                     const SizedBox(height: 80),
                   ],
                 ),
@@ -837,67 +1166,404 @@ class _OrderDetailScreenState extends ConsumerState<OrderDetailScreen> {
         ),
       ),
 
-      // ── Bottom Save button ──
-      bottomNavigationBar: locked
-          ? null
-          : SafeArea(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                child: SizedBox(
-                  height: 56,
-                  child: ElevatedButton.icon(
-                    onPressed: isLoading
-                        ? null
-                        : (widget.isSeller ? _savePrices : _saveItems),
-                    icon: isLoading
-                        ? const SizedBox(
-                            width: 18, height: 18,
-                            child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white))
-                        : Icon(widget.isSeller
-                            ? Icons.save_rounded
-                            : Icons.check_circle_outline_rounded),
-                    label: Text(
-                      widget.isSeller ? 'Save Prices' : 'Save Changes',
-                      style: const TextStyle(
-                          fontSize: 16, fontWeight: FontWeight.w600),
-                    ),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: _kPrimary,
-                      foregroundColor: Colors.white,
-                      elevation: 0,
-                      shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(30)),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+      // ── Bottom action bar ──
+      bottomNavigationBar: _buildBottomBar(isLoading),
     );
   }
 
-  Widget _statusPill(String status) {
-    final isPending = status.toUpperCase() == 'PENDING';
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-      decoration: BoxDecoration(
-        color: isPending ? const Color(0xFFFFF4E5) : const Color(0xFFF0FDF4),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isPending
-              ? const Color(0xFFFED7AA)
-              : const Color(0xFFBBF7D0),
+  Widget? _buildBottomBar(bool isLoading) {
+    final status = widget.order.status;
+
+    // ── Customer side ──
+    if (!widget.isSeller) {
+      if (status == 'PENDING') {
+        // Customer can edit and save items
+        return _actionBar(
+          isLoading: isLoading,
+          label: 'Save Changes',
+          icon: Icons.check_circle_outline_rounded,
+          color: _kPrimary,
+          onTap: _saveItems,
+        );
+      }
+      if (status == 'PRICED') {
+        // Customer confirms pickup type
+        return _actionBar(
+          isLoading: isLoading,
+          label: 'Confirm Order',
+          icon: Icons.check_circle_outline_rounded,
+          color: _kPriced,
+          onTap: _showConfirmPickupDialog,
+        );
+      }
+      return null; // All other statuses: no bottom action for customer
+    }
+
+    // ── Seller side ──
+    if (status == 'PENDING') {
+      // Seller sets prices
+      return _actionBar(
+        isLoading: isLoading,
+        label: 'Save Prices',
+        icon: Icons.save_rounded,
+        color: _kPrimary,
+        onTap: _savePrices,
+      );
+    }
+    if (status == 'confirmed_immediate') {
+      return _actionBar(
+        isLoading: isLoading,
+        label: 'Complete Order',
+        icon: Icons.check_circle_outline_rounded,
+        color: _kPriced,
+        onTap: _completeOrder,
+      );
+    }
+    if (status == 'confirmed') {
+      return _actionBar(
+        isLoading: isLoading,
+        label: 'Mark Ready',
+        icon: Icons.inventory_2_outlined,
+        color: _kPrimary,
+        onTap: _markReady,
+      );
+    }
+    if (status == 'ready') {
+      return _actionBar(
+        isLoading: isLoading,
+        label: 'Verify Code & Complete',
+        icon: Icons.verified_outlined,
+        color: _kPriced,
+        onTap: _verifyCode,
+      );
+    }
+    // expired_pending_confirmation: buttons are inline in the card, not bottom bar
+    return null;
+  }
+
+  Widget _actionBar({
+    required bool isLoading,
+    required String label,
+    required IconData icon,
+    required Color color,
+    required VoidCallback onTap,
+  }) =>
+      SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+          child: SizedBox(
+            height: 56,
+            child: ElevatedButton.icon(
+              onPressed: isLoading ? null : onTap,
+              icon: isLoading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.white))
+                  : Icon(icon),
+              label: Text(label,
+                  style: const TextStyle(
+                      fontSize: 16, fontWeight: FontWeight.w600)),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: color,
+                foregroundColor: Colors.white,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30)),
+              ),
+            ),
+          ),
         ),
+      );
+
+  // ── Pickup code / deadline info card ──
+  Widget _buildLifecycleCard() {
+    final status = widget.order.status;
+    final code = widget.order.pickupCode;
+    final deadline = widget.order.pickupDeadlineLocal;
+
+    // Customer: show pickup code when confirmed/ready
+    if (!widget.isSeller && code != null && (status == 'confirmed' || status == 'ready')) {
+      final remaining = deadline != null ? deadline.difference(DateTime.now()) : null;
+      final isExpiringSoon =
+          remaining != null && remaining.inMinutes <= 30 && remaining.inMinutes > 0;
+      final isExpired = remaining != null && remaining.isNegative;
+
+      return Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(16),
+              gradient: LinearGradient(
+                colors: isExpired
+                    ? [const Color(0xFFEF4444), const Color(0xFFDC2626)]
+                    : isExpiringSoon
+                        ? [_kPending, const Color(0xFFEA580C)]
+                        : [_kPrimary, const Color(0xFF6366F1)],
+              ),
+            ),
+            child: Column(
+              children: [
+                const Text('YOUR PICKUP CODE',
+                    style: TextStyle(
+                        color: Colors.white70,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w600,
+                        letterSpacing: 1.2)),
+                const SizedBox(height: 8),
+                Text(
+                  code.split('').join('  '),
+                  style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 42,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 4),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Show this code to the seller when collecting.',
+                  style: TextStyle(color: Colors.white70, fontSize: 12),
+                  textAlign: TextAlign.center,
+                ),
+                if (deadline != null && status == 'ready') ...[
+                  const SizedBox(height: 12),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      isExpired
+                          ? 'Pickup deadline has passed'
+                          : 'Collect before ${_fmt2(deadline)}',
+                      style: const TextStyle(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 13),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    // Seller: show deadline info on ready orders
+    if (widget.isSeller && status == 'ready' && deadline != null) {
+      final remaining = deadline.difference(DateTime.now());
+      final mins = remaining.inMinutes;
+      final label = mins <= 0 ? 'Deadline passed' : '${mins} min remaining';
+      final color = mins <= 0 ? Colors.redAccent : mins <= 30 ? _kPending : _kPriced;
+
+      return Column(
+        children: [
+          const SizedBox(height: 12),
+          Container(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: color.withOpacity(0.35)),
+            ),
+            child: Row(
+              children: [
+                Icon(Icons.timer_outlined, color: color, size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Pickup Deadline',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                              color: color)),
+                      Text(_fmt2(deadline),
+                          style: const TextStyle(
+                              fontSize: 12, color: Color(0xFF64748B))),
+                    ],
+                  ),
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(
+                      horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: color.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(20),
+                  ),
+                  child: Text(label,
+                      style: TextStyle(
+                          color: color,
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
+    return const SizedBox.shrink();
+  }
+
+  String _fmt2(DateTime dt) {
+    final h = dt.hour > 12 ? dt.hour - 12 : dt.hour == 0 ? 12 : dt.hour;
+    final m = dt.minute.toString().padLeft(2, '0');
+    final period = dt.hour >= 12 ? 'PM' : 'AM';
+    return '$h:$m $period';
+  }
+
+  Widget _buildStepper() {
+    final status = widget.order.status.toUpperCase();
+    final pickupType = widget.order.pickupType;
+
+    // Define the sequence of steps based on pickup type (if known)
+    List<String> steps;
+    if (pickupType == 'immediate' || status == 'CONFIRMED_IMMEDIATE') {
+      steps = ['PENDING', 'PRICED', 'CONFIRMED_IMMEDIATE', 'COMPLETED'];
+    } else {
+      steps = ['PENDING', 'PRICED', 'CONFIRMED', 'READY', 'COMPLETED'];
+    }
+
+    // Handle failure states
+    bool isExpired = status == 'EXPIRED' || status == 'EXPIRED_PENDING_CONFIRMATION';
+    if (isExpired) {
+      if (!steps.contains(status)) {
+        // If expired, replace later steps with expired
+        if (status == 'EXPIRED_PENDING_CONFIRMATION') {
+          steps = ['PENDING', 'PRICED', 'EXPIRED_PENDING_CONFIRMATION'];
+        } else {
+          // General expiry (e.g., no-show)
+          int readyIdx = steps.indexOf('READY');
+          if (readyIdx != -1) {
+             steps = steps.sublist(0, readyIdx + 1)..add('EXPIRED');
+          } else {
+             steps.add('EXPIRED');
+          }
+        }
+      }
+    }
+
+    // Find current index
+    int currentIndex = steps.indexOf(status);
+    if (currentIndex == -1) {
+      // Fallback if status not in list (e.g. migrating data)
+      if (status == 'COMPLETED') currentIndex = steps.length - 1;
+      else currentIndex = 0;
+    }
+
+    // Mapping for display
+    final Map<String, (String, String, Color)> displayMap = {
+      'PENDING': ('Order Sent', 'Customer prepared the list', _kPending),
+      'PRICED': ('Priced by Seller', 'Prices added, awaiting confirmation', _kPriced),
+      'CONFIRMED': ('Confirmed', 'Customer confirmed, preparing order', _kPrimary),
+      'CONFIRMED_IMMEDIATE': ('Confirmed (Immediate)', 'Customer is arriving to collect', _kPrimary),
+      'READY': ('Ready for Pick-Up', 'Order packed and awaiting collection', _kPending),
+      'COMPLETED': ('Completed', 'Order successfully collected', _kPriced),
+      'EXPIRED_PENDING_CONFIRMATION': ('Expired', 'Not confirmed in time', Colors.redAccent),
+      'EXPIRED': ('Cancelled/No-Show', 'Order was not collected', Colors.redAccent),
+    };
+
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8)
+        ],
       ),
-      child: Text(
-        isPending ? 'Pending' : 'Priced',
-        style: TextStyle(
-            color: isPending ? _kPending : _kPriced,
-            fontWeight: FontWeight.w600,
-            fontSize: 13),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text('ORDER STATUS',
+              style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0xFF94A3B8),
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 16),
+          ...List.generate(steps.length, (i) {
+            final stepKey = steps[i];
+            final isCompleted = i <= currentIndex;
+            final isCurrent = i == currentIndex;
+            final isLast = i == steps.length - 1;
+            
+            final displayInfo = displayMap[stepKey] ?? (stepKey, '', Colors.grey);
+            final title = displayInfo.$1;
+            final subtitle = displayInfo.$2;
+            final color = displayInfo.$3;
+            
+            // Adjust colors for past vs current vs future
+            final markerColor = isCompleted ? color : Colors.grey.shade300;
+            final titleColor = isCompleted ? const Color(0xFF0F172A) : Colors.grey.shade400;
+            final subtitleColor = isCompleted ? const Color(0xFF64748B) : Colors.grey.shade300;
+
+            return Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    // Marker
+                    Container(
+                      width: 20, height: 20,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isCompleted ? markerColor : Colors.white,
+                        border: Border.all(
+                          color: isCompleted ? markerColor : Colors.grey.shade300,
+                          width: 2,
+                        ),
+                      ),
+                      child: isCompleted
+                          ? const Icon(Icons.check_rounded, size: 12, color: Colors.white)
+                          : null,
+                    ),
+                    // Line
+                    if (!isLast)
+                      Container(
+                        width: 2, height: 36,
+                        color: i < currentIndex ? markerColor : Colors.grey.shade200,
+                        margin: const EdgeInsets.symmetric(vertical: 4),
+                      ),
+                  ],
+                ),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(title,
+                          style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: isCurrent ? FontWeight.bold : FontWeight.w600,
+                              color: titleColor)),
+                      if (subtitle.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(subtitle,
+                            style: TextStyle(fontSize: 12, color: subtitleColor)),
+                      ],
+                      if (!isLast) const SizedBox(height: 20),
+                    ],
+                  ),
+                ),
+              ],
+            );
+          }),
+        ],
       ),
     );
   }
+
 
   String _formatDate(String iso) {
     final d = DateTime.tryParse(iso)?.toLocal();

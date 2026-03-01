@@ -37,18 +37,18 @@ class OrderNotifier extends StateNotifier<OrderState> {
 
   OrderNotifier(this._repository) : super(const OrderState());
 
+  // ── Helper: replace a single order in the list ──
+  List<OrderModel> _replace(OrderModel updated) =>
+      state.orders.map((o) => o.id == updated.id ? updated : o).toList();
+
   Future<bool> createOrder({
     required String sellerId,
     required List<Map<String, dynamic>> items,
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final order = await _repository.createOrder(
-          sellerId: sellerId, items: items);
-      state = state.copyWith(
-        isLoading: false,
-        orders: [...state.orders, order],
-      );
+      final order = await _repository.createOrder(sellerId: sellerId, items: items);
+      state = state.copyWith(isLoading: false, orders: [...state.orders, order]);
       return true;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -82,12 +82,8 @@ class OrderNotifier extends StateNotifier<OrderState> {
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final updated = await _repository.updateOrderPrices(
-          orderId: orderId, items: items);
-      final updatedList = state.orders
-          .map((o) => o.id == updated.id ? updated : o)
-          .toList();
-      state = state.copyWith(isLoading: false, orders: updatedList);
+      final updated = await _repository.updateOrderPrices(orderId: orderId, items: items);
+      state = state.copyWith(isLoading: false, orders: _replace(updated));
       return true;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
@@ -101,15 +97,81 @@ class OrderNotifier extends StateNotifier<OrderState> {
   }) async {
     state = state.copyWith(isLoading: true, error: null);
     try {
-      final updated =
-          await _repository.updateOrderItems(orderId: orderId, items: items);
-      final updatedList =
-          state.orders.map((o) => o.id == updated.id ? updated : o).toList();
-      state = state.copyWith(isLoading: false, orders: updatedList);
+      final updated = await _repository.updateOrderItems(orderId: orderId, items: items);
+      state = state.copyWith(isLoading: false, orders: _replace(updated));
       return true;
     } catch (e) {
       state = state.copyWith(isLoading: false, error: e.toString());
       return false;
+    }
+  }
+
+  Future<bool> confirmOrder({
+    required String orderId,
+    required String pickupType,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final updated = await _repository.confirmOrder(orderId: orderId, pickupType: pickupType);
+      state = state.copyWith(isLoading: false, orders: _replace(updated));
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> markReady({required String orderId}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final updated = await _repository.markReady(orderId: orderId);
+      state = state.copyWith(isLoading: false, orders: _replace(updated));
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> verifyCode({
+    required String orderId,
+    required String code,
+  }) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final updated = await _repository.verifyCode(orderId: orderId, code: code);
+      state = state.copyWith(isLoading: false, orders: _replace(updated));
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<bool> completeOrder({required String orderId}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final updated = await _repository.completeOrder(orderId: orderId);
+      state = state.copyWith(isLoading: false, orders: _replace(updated));
+      return true;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return false;
+    }
+  }
+
+  Future<Map<String, dynamic>?> reportNoShow({required String orderId}) async {
+    state = state.copyWith(isLoading: true, error: null);
+    try {
+      final result = await _repository.reportNoShow(orderId: orderId);
+      // Remove the expired order from the list
+      final updated = state.orders.where((o) => o.id != orderId).toList();
+      // Re-fetch to get updated status
+      state = state.copyWith(isLoading: false, orders: updated);
+      return result;
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+      return null;
     }
   }
 

@@ -1,0 +1,5 @@
+﻿Analyzing splash_screen.dart...
+
+warning - splash_screen.dart:3:8 - Unused import: '../../core/services/local_storage.dart'. Try removing the import directive. - unused_import
+
+1 issue found.

@@ -47,4 +47,50 @@ class OrderRepository {
     );
     return OrderModel.fromJson(response['order'] as Map<String, dynamic>);
   }
+
+  Future<OrderModel> confirmOrder({
+    required String orderId,
+    required String pickupType, // 'immediate' | 'later'
+  }) async {
+    final response = await ApiClient.post(
+      '${AppConstants.orders}/$orderId/confirm',
+      {'pickupType': pickupType},
+    );
+    return OrderModel.fromJson(response['order'] as Map<String, dynamic>);
+  }
+
+  Future<OrderModel> markReady({required String orderId}) async {
+    final response = await ApiClient.post(
+      '${AppConstants.orders}/$orderId/ready',
+      {},
+    );
+    return OrderModel.fromJson(response['order'] as Map<String, dynamic>);
+  }
+
+  Future<OrderModel> verifyCode({
+    required String orderId,
+    required String code,
+  }) async {
+    final response = await ApiClient.post(
+      '${AppConstants.orders}/$orderId/verify-code',
+      {'code': code},
+    );
+    return OrderModel.fromJson(response['order'] as Map<String, dynamic>);
+  }
+
+  Future<OrderModel> completeOrder({required String orderId}) async {
+    final response = await ApiClient.post(
+      '${AppConstants.orders}/$orderId/complete',
+      {},
+    );
+    return OrderModel.fromJson(response['order'] as Map<String, dynamic>);
+  }
+
+  Future<Map<String, dynamic>> reportNoShow({required String orderId}) async {
+    final response = await ApiClient.post(
+      '${AppConstants.orders}/$orderId/no-show',
+      {},
+    );
+    return response;
+  }
 }

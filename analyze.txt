@@ -1,0 +1,8 @@
+﻿Analyzing customer_dashboard.dart...                            
+
+   info - Use 'const' with the constructor to improve performance - lib\views\orders\customer_dashboard.dart:240:9 - prefer_const_constructors
+   info - Use 'const' with the constructor to improve performance - lib\views\orders\customer_dashboard.dart:242:18 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\views\orders\customer_dashboard.dart:244:23 - prefer_const_literals_to_create_immutables
+   info - Use 'const' with the constructor to improve performance - lib\views\orders\customer_dashboard.dart:1191:22 - prefer_const_constructors
+   info - Use 'const' literals as arguments to constructors of '@immutable' classes - lib\views\orders\customer_dashboard.dart:1192:27 - prefer_const_literals_to_create_immutables
+
