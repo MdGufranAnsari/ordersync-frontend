@@ -14,7 +14,7 @@ class UserAvatar extends StatelessWidget {
     required this.name,
     this.radius = 20,
     this.backgroundColor = const Color(0xFFEEEFF8),
-    this.textColor = AppConstants.primaryColor,
+    this.textColor = const Color(0xFF3D52D5),
   });
 
   @override

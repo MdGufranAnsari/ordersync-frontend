@@ -5,10 +5,12 @@ import 'package:image_picker/image_picker.dart';
 import '../../core/utils/constants.dart';
 import '../../core/services/api_service.dart';
 import '../../providers/order_provider.dart';
+import '../../providers/auth_provider.dart';
 import '../auth/login_screen.dart';
 import 'order_detail_screen.dart';
 import 'customer_order_history_screen.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../core/services/socket_service.dart';
 
 const _kPrimary = Color(0xFF3D52D5);
 const _kBg = Color(0xFFF0F2F5);
@@ -57,14 +59,27 @@ class _CustomerDashboardState extends ConsumerState<CustomerDashboard>
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
-    Future.microtask(
-        () => ref.read(orderProvider.notifier).fetchCustomerOrders());
+    Future.microtask(() {
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        SocketService().init(user.id);
+        SocketService().addOrderListener(_onOrderUpdated);
+      }
+      ref.read(orderProvider.notifier).fetchCustomerOrders();
+    });
+  }
+
+  void _onOrderUpdated() {
+    if (mounted) {
+      ref.read(orderProvider.notifier).fetchCustomerOrders();
+    }
   }
 
   final TextEditingController _sellerSearchController = TextEditingController();
 
   @override
   void dispose() {
+    SocketService().removeOrderListener(_onOrderUpdated);
     _tabController.dispose();
     _sellerSearchController.dispose();
     for (final c in _nameControllers) {

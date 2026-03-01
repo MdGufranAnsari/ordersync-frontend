@@ -9,6 +9,7 @@ import '../auth/login_screen.dart';
 import 'order_detail_screen.dart';
 import 'customer_order_history_screen.dart';
 import '../../core/widgets/user_avatar.dart';
+import '../../core/services/socket_service.dart';
 
 const _kPrimary = Color(0xFF3D52D5);
 const _kBg = Color(0xFFF0F2F5);
@@ -30,12 +31,25 @@ class _SellerDashboardState extends ConsumerState<SellerDashboard> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(
-        () => ref.read(orderProvider.notifier).fetchSellerOrders());
+    Future.microtask(() {
+      final user = ref.read(authProvider).user;
+      if (user != null) {
+        SocketService().init(user.id);
+        SocketService().addOrderListener(_onOrderUpdated);
+      }
+      ref.read(orderProvider.notifier).fetchSellerOrders();
+    });
+  }
+
+  void _onOrderUpdated() {
+    if (mounted) {
+      ref.read(orderProvider.notifier).fetchSellerOrders();
+    }
   }
 
   @override
   void dispose() {
+    SocketService().removeOrderListener(_onOrderUpdated);
     _searchController.dispose();
     super.dispose();
   }
